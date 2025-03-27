@@ -21,7 +21,7 @@ def main():
     print("=" * 60)
     print("\nStarting server... Please wait.")
     print("\nOnce ready, open your browser and navigate to:")
-    print("http://localhost:5000\n")
+    print("http://localhost:5001\n")
 
     # Create the static/img directory if it doesn't exist
     os.makedirs("web/static/img", exist_ok=True)
@@ -53,7 +53,7 @@ def main():
         print("The application will still work, but without proper branding.")
 
     # Start the web application
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", port=5001, debug=True, allow_unsafe_werkzeug=True)
 
 
 if __name__ == "__main__":

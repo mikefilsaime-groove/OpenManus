@@ -63,10 +63,12 @@
                         </button>
                     </div>
                     <div class="card-body computer-display" id="computerDisplay">
-                        <div class="text-center text-secondary tool-placeholder">
+                        <div class="text-center text-secondary tool-placeholder" id="toolPlaceholder">
                             <i class="fas fa-desktop fa-4x mb-3"></i>
                             <p>When Manus uses tools, the activity will appear here</p>
                         </div>
+                        <iframe id="browserFrame"
+                            style="display: none; width: 100%; height: 100%; border: none;"></iframe>
                     </div>
                     <div class="progress">
                         <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar"
@@ -317,6 +319,20 @@
         }
 
         function processLogMessage(log) {
+            // Detect browser navigation
+            if (log.includes('browser_use') && log.includes('go_to_url')) {
+                const urlMatch = log.match(/Navigated to (https?:\/\/[^\s]+)/);
+                if (urlMatch) {
+                    const url = urlMatch[1];
+                    const browserFrame = document.getElementById('browserFrame');
+                    const toolPlaceholder = document.getElementById('toolPlaceholder');
+
+                    browserFrame.style.display = 'block';
+                    toolPlaceholder.style.display = 'none';
+                    browserFrame.src = url;
+                }
+            }
+
             // Track steps
             if (log.includes('Executing step')) {
                 const match = log.match(/Executing step (\d+)\/(\d+)/);
@@ -380,33 +396,6 @@
                 if (steps.length > 0) {
                     steps[steps.length - 1].status = 'completed';
                 }
-            }
-
-            // Detect browser use
-            if (log.includes('browser_use')) {
-                updateComputerDisplay(`
-                    <div class="browser-simulation">
-                        <div class="browser-header">
-                            <i class="fas fa-globe me-2"></i>
-                            <span>Browser</span>
-                        </div>
-                        <div class="browser-content">
-                            <div class="text-center p-4">
-                                <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
-                                <p>Browsing the web for information...</p>
-                            </div>
-                        </div>
-                    </div>
-                `);
-
-                // Add browser step
-                steps.push({
-                    type: 'browser',
-                    name: 'Web Search',
-                    status: 'running'
-                });
-
-                stepCount++;
             }
         }
 
