@@ -1,8 +1,8 @@
 import threading
-import tomllib
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import tomli as tomllib
 from pydantic import BaseModel, Field
 
 
