@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import sys
+from typing import Optional
 
 from app.agent.mcp import MCPAgent
 from app.config import config
@@ -19,7 +20,7 @@ class MCPRunner:
     async def initialize(
         self,
         connection_type: str,
-        server_url: str | None = None,
+        server_url: Optional[str] = None,
     ) -> None:
         """Initialize the MCP agent with the appropriate connection."""
         logger.info(f"Initializing MCPAgent with {connection_type} connection...")
@@ -78,8 +79,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--server-url",
-        default="http://127.0.0.1:8000/sse",
-        help="URL for SSE connection",
+        "-s",
+        help="MCP server URL",
+        default=None,
     )
     parser.add_argument(
         "--interactive", "-i", action="store_true", help="Run in interactive mode"
