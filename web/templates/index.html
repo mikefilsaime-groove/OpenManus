@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manus AI</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+</head>
+
+<body class="bg-dark">
+    <div class="container-fluid h-100">
+        <div class="row pt-3">
+            <div class="col-12 text-center mb-3">
+                <h2 class="text-light">
+                    <img src="{{ url_for('static', filename='img/manus-logo.png') }}" alt="Manus Logo" height="40"
+                        class="me-2">
+                    Manus AI
+                </h2>
+            </div>
+        </div>
+
+        <div class="row h-75">
+            <div class="col-md-7 pe-md-1">
+                <div class="card bg-gray-800 h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="text-light mb-0" id="taskTitle">New Task</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-light me-2">
+                                <i class="fas fa-link"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-light">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body conversation-area" id="conversationArea">
+                        <div class="welcome-message">
+                            <p>How can I help you today?</p>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <form id="messageForm" class="d-flex">
+                            <input type="text" id="userPrompt" class="form-control me-2"
+                                placeholder="Type your request here...">
+                            <button type="submit" class="btn btn-primary" id="submitButton">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-5 ps-md-1 mt-3 mt-md-0">
+                <div class="card bg-gray-800 h-100">
+                    <div class="card-header">
+                        <h5 class="text-light mb-0">Manus's Computer</h5>
+                        <button class="btn btn-sm btn-maximize float-end">
+                            <i class="fas fa-expand-arrows-alt text-light"></i>
+                        </button>
+                    </div>
+                    <div class="card-body computer-display" id="computerDisplay">
+                        <div class="text-center text-secondary tool-placeholder">
+                            <i class="fas fa-desktop fa-4x mb-3"></i>
+                            <p>When Manus uses tools, the activity will appear here</p>
+                        </div>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar"
+                            id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="card-footer bg-gray-850 p-2">
+                        <div class="d-flex align-items-center">
+                            <div class="status-indicator" id="statusIndicator">
+                                <span class="badge bg-secondary">Idle</span>
+                                <span class="status-text text-light ms-2">Ready for your request</span>
+                            </div>
+                            <div class="ms-auto step-indicator">
+                                <span id="currentStep">0</span>/<span id="totalSteps">0</span>
+                                <button class="btn btn-sm btn-outline-light ms-2" id="showStepsButton">
+                                    <i class="fas fa-list-ol"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="progress" id="mainProgressBar" style="display: none;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar"
+                        style="width: 0%"></div>
+                </div>
+                <div id="statusArea" class="text-center p-2" style="display: none;">
+                    <div class="spinner-border text-light spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span class="text-light">Manus is replaying the task...</span>
+                    <button class="btn btn-outline-light btn-sm ms-3" id="skipButton">Skip to results</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for displaying steps -->
+    <div class="modal fade" id="stepsModal" tabindex="-1" aria-labelledby="stepsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content bg-gray-800">
+                <div class="modal-header">
+                    <h5 class="modal-title text-light" id="stepsModalLabel">Task Steps</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="list-group" id="stepsList">
+                        <!-- Steps will be added here dynamically -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Store the session ID provided by Flask
+        const sessionId = "{{ session_id }}";
+
+        // Connect to the Socket.IO server
+        const socket = io.connect(window.location.origin + '/manus');
+
+        // DOM Elements
+        const conversationArea = document.getElementById('conversationArea');
+        const userPrompt = document.getElementById('userPrompt');
+        const messageForm = document.getElementById('messageForm');
+        const computerDisplay = document.getElementById('computerDisplay');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const progressBar = document.getElementById('progressBar');
+        const currentStep = document.getElementById('currentStep');
+        const totalSteps = document.getElementById('totalSteps');
+        const taskTitle = document.getElementById('taskTitle');
+        const mainProgressBar = document.getElementById('mainProgressBar');
+        const statusArea = document.getElementById('statusArea');
+        const skipButton = document.getElementById('skipButton');
+        const stepsList = document.getElementById('stepsList');
+        const showStepsButton = document.getElementById('showStepsButton');
+        const stepsModal = new bootstrap.Modal(document.getElementById('stepsModal'));
+
+        // Agent state
+        let agentRunning = false;
+        let steps = [];
+        let stepCount = 0;
+
+        // Socket event handlers
+        socket.on('connected', function (data) {
+            console.log('Connected to Manus server');
+        });
+
+        socket.on('agent_update', function (data) {
+            if (data.session_id !== sessionId) return;
+
+            if (data.log) {
+                updateConversation(data.log);
+                processLogMessage(data.log);
+            }
+
+            if (data.error) {
+                showError(data.error);
+            }
+        });
+
+        socket.on('agent_complete', function (data) {
+            if (data.session_id !== sessionId) return;
+
+            agentRunning = false;
+            updateStatus('Completed', 'bg-success');
+            progressBar.style.width = '100%';
+
+            // Hide the status area
+            statusArea.style.display = 'none';
+            mainProgressBar.style.display = 'none';
+
+            // Enable the input field
+            userPrompt.disabled = false;
+        });
+
+        // Event listeners
+        messageForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const prompt = userPrompt.value.trim();
+
+            if (prompt && !agentRunning) {
+                sendPrompt(prompt);
+                userPrompt.value = '';
+            }
+        });
+
+        skipButton.addEventListener('click', function () {
+            statusArea.style.display = 'none';
+            mainProgressBar.style.display = 'none';
+        });
+
+        showStepsButton.addEventListener('click', function () {
+            populateStepsList();
+            stepsModal.show();
+        });
+
+        // Functions
+        async function sendPrompt(prompt) {
+            // Update conversation with user message
+            addMessage('user', prompt);
+
+            // Update task title
+            taskTitle.innerText = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+
+            // Clear previous agent state
+            steps = [];
+            stepCount = 0;
+            currentStep.innerText = '0';
+            totalSteps.innerText = '0';
+
+            // Update UI to show agent is working
+            agentRunning = true;
+            updateStatus('Working', 'bg-info');
+            userPrompt.disabled = true;
+            progressBar.style.width = '0%';
+
+            // Show the status area
+            statusArea.style.display = 'block';
+            mainProgressBar.style.display = 'block';
+
+            try {
+                // Send the request to the server
+                const response = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        session_id: sessionId
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Unknown error');
+                }
+
+                // Add initial agent response
+                addMessage('assistant', 'I\'ll help you with that request. Let me think...');
+
+                // Show initial "thinking" state in computer display
+                computerDisplay.innerHTML = `
+                    <div class="agent-thinking">
+                        <div class="spinner-border text-info mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-light">Analyzing your request...</p>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message);
+                agentRunning = false;
+                userPrompt.disabled = false;
+            }
+        }
+
+        function addMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+
+            if (role === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="message-content">
+                        <p>${content}</p>
+                    </div>
+                `;
+            } else if (role === 'assistant') {
+                messageDiv.innerHTML = `
+                    <div class="message-avatar">
+                        <img src="{{ url_for('static', filename='img/manus-avatar.png') }}" alt="Manus">
+                    </div>
+                    <div class="message-content">
+                        <p>${content}</p>
+                    </div>
+                `;
+            } else if (role === 'tool') {
+                messageDiv.innerHTML = `
+                    <div class="tool-output">
+                        <div class="tool-header">
+                            <i class="fas fa-wrench me-2"></i>
+                            <span>Tool Output</span>
+                        </div>
+                        <pre>${content}</pre>
+                    </div>
+                `;
+            }
+
+            conversationArea.appendChild(messageDiv);
+            conversationArea.scrollTop = conversationArea.scrollHeight;
+        }
+
+        function updateConversation(log) {
+            // Add agent's thinking to the conversation
+            if (log.includes('thoughts:')) {
+                const thoughtContent = log.split('thoughts:')[1].trim();
+                addMessage('assistant', thoughtContent);
+            }
+        }
+
+        function processLogMessage(log) {
+            // Track steps
+            if (log.includes('Executing step')) {
+                const match = log.match(/Executing step (\d+)\/(\d+)/);
+                if (match) {
+                    const current = parseInt(match[1]);
+                    const total = parseInt(match[2]);
+
+                    currentStep.innerText = current;
+                    totalSteps.innerText = total;
+
+                    // Update progress bar
+                    const progress = (current / total) * 100;
+                    progressBar.style.width = `${progress}%`;
+
+                    // Update main progress bar
+                    const mainProgressBarElement = mainProgressBar.querySelector('.progress-bar');
+                    mainProgressBarElement.style.width = `${progress}%`;
+                }
+            }
+
+            // Capture tool usage
+            if (log.includes('Activating tool:')) {
+                const toolName = log.match(/Activating tool: '(.+?)'/)[1];
+                updateComputerDisplay(`
+                    <div class="tool-execution">
+                        <div class="tool-header mb-2">
+                            <i class="fas fa-cog fa-spin me-2"></i>
+                            <span>Executing tool: ${toolName}</span>
+                        </div>
+                        <div class="progress mb-2">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-warning" style="width: 100%"></div>
+                        </div>
+                    </div>
+                `);
+
+                // Add step to the list
+                steps.push({
+                    type: 'tool',
+                    name: toolName,
+                    status: 'running'
+                });
+
+                // Update the steps list
+                stepCount++;
+            }
+
+            // Capture tool results
+            if (log.includes('Observed output of cmd')) {
+                const outputStart = log.indexOf('Observed output of cmd');
+                let toolOutput = log.substring(outputStart);
+
+                // Limit the length of the output for display
+                if (toolOutput.length > 500) {
+                    toolOutput = toolOutput.substring(0, 500) + '... (output truncated)';
+                }
+
+                // Add tool output to conversation
+                addMessage('tool', toolOutput);
+
+                // Update the last step status
+                if (steps.length > 0) {
+                    steps[steps.length - 1].status = 'completed';
+                }
+            }
+
+            // Detect browser use
+            if (log.includes('browser_use')) {
+                updateComputerDisplay(`
+                    <div class="browser-simulation">
+                        <div class="browser-header">
+                            <i class="fas fa-globe me-2"></i>
+                            <span>Browser</span>
+                        </div>
+                        <div class="browser-content">
+                            <div class="text-center p-4">
+                                <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                                <p>Browsing the web for information...</p>
+                            </div>
+                        </div>
+                    </div>
+                `);
+
+                // Add browser step
+                steps.push({
+                    type: 'browser',
+                    name: 'Web Search',
+                    status: 'running'
+                });
+
+                stepCount++;
+            }
+        }
+
+        function updateComputerDisplay(html) {
+            computerDisplay.innerHTML = html;
+        }
+
+        function updateStatus(text, badgeClass) {
+            const badge = statusIndicator.querySelector('.badge');
+            const statusText = statusIndicator.querySelector('.status-text');
+
+            badge.className = `badge ${badgeClass}`;
+            badge.innerText = text;
+
+            if (text === 'Working') {
+                statusText.innerText = 'Processing your request';
+            } else if (text === 'Completed') {
+                statusText.innerText = 'Task completed';
+            } else {
+                statusText.innerText = 'Ready for your request';
+            }
+        }
+
+        function showError(message) {
+            addMessage('assistant', `Error: ${message}`);
+            updateStatus('Error', 'bg-danger');
+        }
+
+        function populateStepsList() {
+            stepsList.innerHTML = '';
+
+            steps.forEach((step, index) => {
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item bg-gray-700 text-light';
+
+                let statusIcon;
+                if (step.status === 'completed') {
+                    statusIcon = '<i class="fas fa-check-circle text-success me-2"></i>';
+                } else if (step.status === 'running') {
+                    statusIcon = '<i class="fas fa-spinner fa-spin text-warning me-2"></i>';
+                } else {
+                    statusIcon = '<i class="fas fa-circle text-secondary me-2"></i>';
+                }
+
+                let stepIcon;
+                if (step.type === 'tool') {
+                    stepIcon = '<i class="fas fa-wrench me-2"></i>';
+                } else if (step.type === 'browser') {
+                    stepIcon = '<i class="fas fa-globe me-2"></i>';
+                } else {
+                    stepIcon = '<i class="fas fa-cog me-2"></i>';
+                }
+
+                listItem.innerHTML = `
+                    ${statusIcon}
+                    ${stepIcon}
+                    <span>${step.name}</span>
+                `;
+
+                stepsList.appendChild(listItem);
+            });
+
+            if (steps.length === 0) {
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item bg-gray-700 text-light text-center';
+                listItem.innerText = 'No steps recorded yet';
+                stepsList.appendChild(listItem);
+            }
+        }
+    </script>
+</body>
+
+</html>

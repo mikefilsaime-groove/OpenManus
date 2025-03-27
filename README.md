@@ -129,6 +129,16 @@ For MCP tool version, you can run:
 python run_mcp.py
 ```
 
+For the modern web interface version (similar to commercial Manus):
+```bash
+python run_web.py
+```
+
+Then open your browser and navigate to:
+```
+http://localhost:5000
+```
+
 For unstable multi-agent version, you also can run:
 
 ```bash
